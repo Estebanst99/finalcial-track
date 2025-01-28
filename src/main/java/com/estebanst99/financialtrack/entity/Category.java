@@ -16,6 +16,9 @@ public class Category {
     @Column(nullable = false)
     private String type; // 'income' o 'expense'
 
+    @ManyToOne
+    private User user;
+
     public Long getId() {
         return id;
     }
@@ -38,5 +41,13 @@ public class Category {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
     }
 }

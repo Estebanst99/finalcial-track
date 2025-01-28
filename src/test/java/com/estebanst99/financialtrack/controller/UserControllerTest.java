@@ -11,9 +11,11 @@ import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +38,7 @@ class UserControllerTest {
         user.setEmail("test@example.com");
         when(userService.findByEmail("test@example.com")).thenReturn(Optional.of(user));
 
-        ResponseEntity<User> response = userController.getUserByEmail("test@example.com");
+        ResponseEntity<User> response = (ResponseEntity<User>) userController.getUserByEmail("test@example.com");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(user, response.getBody());
@@ -46,7 +48,7 @@ class UserControllerTest {
     void testGetUserByEmail_UserDoesNotExist() {
         when(userService.findByEmail("test@example.com")).thenReturn(Optional.empty());
 
-        ResponseEntity<User> response = userController.getUserByEmail("test@example.com");
+        ResponseEntity<User> response = (ResponseEntity<User>) userController.getUserByEmail("test@example.com");
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
@@ -57,7 +59,7 @@ class UserControllerTest {
         user.setEmail("test@example.com");
         when(userService.save(any(User.class))).thenReturn(user);
 
-        ResponseEntity<User> response = userController.createUser(user);
+        ResponseEntity<User> response = (ResponseEntity<User>) userController.createUser(user);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertEquals(user, response.getBody());
@@ -65,12 +67,16 @@ class UserControllerTest {
 
     @Test
     void testCreateUser_Failure() throws UserServiceException {
-        when(userService.save(any(User.class))).thenThrow(new RuntimeException());
+        when(userService.save(any(User.class))).thenThrow(new UserServiceException("Error simulado"));
 
         User user = new User();
         user.setEmail("test@example.com");
-        ResponseEntity<User> response = userController.createUser(user);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        ResponseEntity<?> response = userController.createUser(user);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody() instanceof Map); // Asegúrate de que el cuerpo es un Map
+        Map<String, String> responseBody = (Map<String, String>) response.getBody();
+        assertEquals("Error al guardar el usuario: Error simulado", responseBody.get("message"));
     }
 }
