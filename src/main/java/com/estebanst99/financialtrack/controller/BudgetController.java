@@ -8,21 +8,30 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Controlador que gestiona los endpoints relacionados con los presupuestos.
+ * Los usuarios pueden obtener, crear o actualizar sus presupuestos.
+ */
 @RestController
 @RequestMapping("/api/v1/budgets")
 public class BudgetController {
 
     private final BudgetService budgetService;
 
+    /**
+     * Constructor que inyecta el servicio de presupuesto.
+     *
+     * @param budgetService Servicio para gestionar presupuestos.
+     */
     public BudgetController(BudgetService budgetService) {
         this.budgetService = budgetService;
     }
 
     /**
-     * Obtiene presupuestos por usuario.
+     * Endpoint para obtener todos los presupuestos asociados a un usuario.
      *
      * @param userId ID del usuario.
-     * @return Lista de presupuestos.
+     * @return Una respuesta con la lista de presupuestos del usuario, o una respuesta de error.
      */
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<Budget>> getBudgetsByUserId(@PathVariable Long userId) {
@@ -35,10 +44,12 @@ public class BudgetController {
     }
 
     /**
-     * Crea o actualiza un presupuesto.
+     * Endpoint para crear o actualizar un presupuesto.
+     * Si se proporciona un ID existente en el presupuesto, se actualiza ese registro.
+     * Si no, se crea un nuevo presupuesto.
      *
-     * @param budget Presupuesto a guardar.
-     * @return Presupuesto creado o actualizado.
+     * @param budget Objeto {@link Budget} con los datos del presupuesto a crear o actualizar.
+     * @return Una respuesta con el presupuesto creado o actualizado, o una respuesta de error.
      */
     @PostMapping
     public ResponseEntity<Budget> saveBudget(@RequestBody Budget budget) {

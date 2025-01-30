@@ -16,9 +16,11 @@ public class Category {
     @Column(nullable = false)
     private String type; // 'income' o 'expense'
 
-    @ManyToOne
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    // Getters and setters
     public Long getId() {
         return id;
     }

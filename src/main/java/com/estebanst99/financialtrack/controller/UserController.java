@@ -10,12 +10,21 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Controlador REST para la gestión de usuarios.
+ * Proporciona endpoints para crear y consultar usuarios.
+ */
 @RestController
 @RequestMapping("/api/v1/users")
 public class UserController {
 
     private final UserService userService;
 
+    /**
+     * Constructor que inyecta la dependencia del servicio de usuarios.
+     *
+     * @param userService Servicio de usuarios.
+     */
     public UserController(UserService userService) {
         this.userService = userService;
     }
@@ -23,8 +32,9 @@ public class UserController {
     /**
      * Obtiene un usuario por su email.
      *
-     * @param email Email del usuario.
-     * @return Usuario encontrado o 404 si no existe.
+     * @param email Email del usuario que se desea buscar.
+     * @return Una respuesta HTTP con el usuario encontrado y un código 200 (OK).
+     *         Si no se encuentra el usuario, devuelve un código 404 (NOT_FOUND) con un mensaje de error.
      */
     @GetMapping("/{email}")
     public ResponseEntity<?> getUserByEmail(@PathVariable String email) {
@@ -39,11 +49,14 @@ public class UserController {
 
     /**
      * Crea un nuevo usuario.
+     * Verifica si ya existe un usuario con el mismo email antes de proceder.
      *
-     * @param user Usuario a crear.
-     * @return Usuario creado.
+     * @param user Objeto de tipo {@link User} con la información del usuario a crear.
+     * @return Una respuesta HTTP con el usuario creado y un código 201 (CREATED).
+     *         Si ya existe un usuario con el mismo email, devuelve un código 400 (BAD_REQUEST) con un mensaje.
+     *         Si ocurre un error durante la creación, devuelve un código 500 (INTERNAL_SERVER_ERROR) con un mensaje de error.
      */
-    @PostMapping
+    /*@PostMapping
     public ResponseEntity<?> createUser(@RequestBody User user) {
         // Verificar si ya existe un usuario con el mismo email
         Optional<User> existingUser = userService.findByEmail(user.getEmail());
@@ -59,5 +72,5 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Error al guardar el usuario: " + e.getMessage()));
         }
-    }
+    }*/
 }
