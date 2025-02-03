@@ -8,69 +8,93 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
 class BudgetControllerTest {
 
+    @InjectMocks
+    private BudgetController budgetController;
+
     @Mock
     private BudgetService budgetService;
 
-    @InjectMocks
-    private BudgetController budgetController;
+    @Mock
+    private SecurityContext securityContext;
+
+    @Mock
+    private Authentication authentication;
+
+    @Mock
+    private UserDetails userDetails;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+        when(userDetails.getUsername()).thenReturn("test@example.com");
     }
 
     @Test
-    void testGetBudgetsByUserId_Success() throws BudgetServiceException {
-        Long userId = 1L;
-        List<Budget> budgets = Collections.singletonList(new Budget());
-        when(budgetService.findByUserId(userId)).thenReturn(budgets);
+    void testGetBudgets() {
+        List<Budget> budgets = Arrays.asList(new Budget(), new Budget());
+        when(budgetService.findByUserEmail("test@example.com")).thenReturn(budgets);
 
-        ResponseEntity<List<Budget>> response = budgetController.getBudgetsByUserId(userId);
+        ResponseEntity<List<Budget>> response = budgetController.getBudgets();
 
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(budgets, response.getBody());
-    }
-
-    @Test
-    void testGetBudgetsByUserId_Failure() throws BudgetServiceException {
-        Long userId = 1L;
-        when(budgetService.findByUserId(userId)).thenThrow(new BudgetServiceException("Error"));
-
-        ResponseEntity<List<Budget>> response = budgetController.getBudgetsByUserId(userId);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(2, response.getBody().size());
     }
 
     @Test
     void testSaveBudget_Success() throws BudgetServiceException {
         Budget budget = new Budget();
-        Budget savedBudget = new Budget();
-        when(budgetService.save(budget)).thenReturn(savedBudget);
+        when(budgetService.save(any(Budget.class), eq("test@example.com"))).thenReturn(budget);
 
         ResponseEntity<Budget> response = budgetController.saveBudget(budget);
 
-        assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertEquals(savedBudget, response.getBody());
+        assertEquals(201, response.getStatusCodeValue());
+        assertNotNull(response.getBody());
     }
 
     @Test
     void testSaveBudget_Failure() throws BudgetServiceException {
         Budget budget = new Budget();
-        when(budgetService.save(budget)).thenThrow(new BudgetServiceException("Error"));
+        when(budgetService.save(any(Budget.class), eq("test@example.com"))).thenThrow(new BudgetServiceException("Error"));
 
         ResponseEntity<Budget> response = budgetController.saveBudget(budget);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(400, response.getStatusCodeValue());
+    }
+
+    @Test
+    void testGetBudgetCompletion_Success() throws BudgetServiceException {
+        when(budgetService.getBudgetCompletionPercentage(1L)).thenReturn(75.0);
+
+        ResponseEntity<Double> response = budgetController.getBudgetCompletion(1L);
+
+        assertEquals(200, response.getStatusCodeValue());
+        assertEquals(75.0, response.getBody());
+    }
+
+    @Test
+    void testGetBudgetCompletion_Failure() throws BudgetServiceException {
+        when(budgetService.getBudgetCompletionPercentage(1L)).thenThrow(new BudgetServiceException("Error"));
+
+        ResponseEntity<Double> response = budgetController.getBudgetCompletion(1L);
+
+        assertEquals(400, response.getStatusCodeValue());
     }
 }

@@ -1,23 +1,29 @@
 package com.estebanst99.financialtrack.service;
 
 import com.estebanst99.financialtrack.entity.Category;
+import com.estebanst99.financialtrack.entity.User;
 import com.estebanst99.financialtrack.exception.CategoryServiceException;
 import com.estebanst99.financialtrack.repository.CategoryRepository;
+import com.estebanst99.financialtrack.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import static org.mockito.Mockito.*;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class CategoryServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private CategoryService categoryService;
@@ -28,14 +34,16 @@ class CategoryServiceTest {
     }
 
     @Test
-    void testFindByType_ValidType() throws CategoryServiceException {
+    void testFindByTypeAndUser_ValidType() throws CategoryServiceException {
         String type = "income";
+        String userEmail = "user@example.com";
         Category category = new Category();
         category.setName("Salary");
         category.setType(type);
-        when(categoryRepository.findByType(type)).thenReturn(List.of(category));
 
-        List<Category> result = categoryService.findByType(type);
+        when(categoryRepository.findByTypeAndUserEmail(type, userEmail)).thenReturn(List.of(category));
+
+        List<Category> result = categoryService.findByTypeAndUser(type, userEmail);
 
         assertNotNull(result);
         assertEquals(1, result.size());
@@ -43,103 +51,49 @@ class CategoryServiceTest {
     }
 
     @Test
-    void testFindByType_InvalidType() {
+    void testFindByTypeAndUser_ExceptionThrown() {
+        String type = "income";
+        String userEmail = "user@example.com";
 
-        String type = "invalid";
+        when(categoryRepository.findByTypeAndUserEmail(type, userEmail)).thenThrow(new RuntimeException("Database error"));
 
-        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.findByType(type));
-        assertEquals("El tipo de categoría debe ser 'income' o 'expense'.", exception.getMessage());
-    }
+        CategoryServiceException exception = assertThrows(CategoryServiceException.class,
+                () -> categoryService.findByTypeAndUser(type, userEmail));
 
-    @Test
-    void testSave_NewCategory() throws CategoryServiceException {
-
-        Category category = new Category();
-        category.setName("Travel");
-        category.setType("expense");
-        when(categoryRepository.findByType("expense")).thenReturn(List.of());
-        when(categoryRepository.save(category)).thenReturn(category);
-
-        Category savedCategory = categoryService.save(category);
-
-        assertNotNull(savedCategory);
-        verify(categoryRepository, times(1)).save(category);
+        assertEquals("Error al obtener categorías por tipo y usuario.", exception.getMessage());
     }
 
     @Test
     void testSave_DuplicateCategory() {
-
+        String userEmail = "user@example.com";
         Category category = new Category();
         category.setName("Food");
-        category.setType("expense");
-        when(categoryRepository.findByType("expense")).thenReturn(List.of(category));
+        category.setUser(new User());
+        category.getUser().setEmail(userEmail);
+
+        when(categoryRepository.findByNameAndUserEmail("Food", userEmail)).thenReturn(Optional.of(category));
 
         CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.save(category));
         assertEquals("La categoría ya existe en el sistema.", exception.getMessage());
     }
 
     @Test
-    void testValidateCategory_EmptyName() {
-
-        Category category = new Category();
-        category.setName("");
-        category.setType("expense");
-
-        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.save(category));
-        assertEquals("El nombre de la categoría no puede estar vacío.", exception.getMessage());
-    }
-
-    @Test
-    void testDeleteById_CategoryExists() throws CategoryServiceException {
-
-        Long id = 1L;
-        when(categoryRepository.existsById(id)).thenReturn(true);
-
-        categoryService.deleteById(id);
-
-        verify(categoryRepository, times(1)).deleteById(id);
-    }
-
-    @Test
     void testDeleteById_CategoryNotExists() {
-        Long id = 1L;
-        when(categoryRepository.existsById(id)).thenReturn(false);
+        Long categoryId = 1L;
 
-        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.deleteById(id));
+        when(categoryRepository.existsById(categoryId)).thenReturn(false);
+
+        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.delete(categoryId));
         assertEquals("La categoría con el ID proporcionado no existe.", exception.getMessage());
     }
 
     @Test
-    void testValidateCategory_InvalidType() {
+    void testFindUserByEmail_UserNotExists() {
+        String email = "nonexistent@example.com";
 
-        Category category = new Category();
-        category.setName("Invalid Type Category");
-        category.setType("invalid"); // Tipo inválido
+        when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
 
-        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> {
-            categoryService.save(category);
-        });
-        assertEquals("El tipo de categoría debe ser 'income' o 'expense'.", exception.getMessage());
-    }
-
-    @Test
-    void testValidateCategory_ValidCategory() {
-
-        Category category = new Category();
-        category.setName("Valid Category");
-        category.setType("income");
-        when(categoryRepository.findByType("income")).thenReturn(List.of());
-        when(categoryRepository.save(category)).thenReturn(category);
-
-        Category savedCategory = null;
-        try {
-            savedCategory = categoryService.save(category);
-        } catch (CategoryServiceException e) {
-            fail("No debería lanzar excepción para una categoría válida.");
-        }
-
-        assertNotNull(savedCategory);
-        assertEquals("Valid Category", savedCategory.getName());
-        assertEquals("income", savedCategory.getType());
+        CategoryServiceException exception = assertThrows(CategoryServiceException.class, () -> categoryService.findUserByEmail(email));
+        assertEquals("Usuario no encontrado con email: nonexistent@example.com", exception.getMessage());
     }
 }

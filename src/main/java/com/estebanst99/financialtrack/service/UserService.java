@@ -37,12 +37,11 @@ public class UserService {
      * @param user Usuario a guardar.
      * @return Usuario creado.
      */
-    /*@Transactional
+    @Transactional
     public User save(User user) throws UserServiceException {
         if (userRepository.findByEmail(user.getEmail()).isPresent()) {
             throw new UserServiceException("El email ya está registrado.");
         }
         return userRepository.save(user);
-    }*/
-
+    }
 }

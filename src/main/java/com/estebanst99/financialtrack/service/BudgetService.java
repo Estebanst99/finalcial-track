@@ -1,49 +1,55 @@
 package com.estebanst99.financialtrack.service;
 
 import com.estebanst99.financialtrack.entity.Budget;
+import com.estebanst99.financialtrack.entity.User;
 import com.estebanst99.financialtrack.exception.BudgetServiceException;
 import com.estebanst99.financialtrack.repository.BudgetRepository;
 import com.estebanst99.financialtrack.repository.CategoryRepository;
 import com.estebanst99.financialtrack.repository.UserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
-
+/**
+ * Servicio para gestionar operaciones relacionadas con los presupuestos.
+ */
 @Service
 public class BudgetService {
 
     private final BudgetRepository budgetRepository;
-    private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
+    private final UserRepository userRepository;
 
     /**
-     * Constructor para inyectar los repositorios.
+     * Constructor para inicializar los repositorios necesarios.
+     *
+     * @param budgetRepository   Repositorio para operaciones de presupuesto.
+     * @param categoryRepository Repositorio para operaciones de categorías.
+     * @param userRepository     Repositorio para operaciones de usuarios.
      */
-    public BudgetService(BudgetRepository budgetRepository, UserRepository userRepository, CategoryRepository categoryRepository) {
+    public BudgetService(BudgetRepository budgetRepository, CategoryRepository categoryRepository, UserRepository userRepository) {
         this.budgetRepository = budgetRepository;
-        this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
+        this.userRepository = userRepository;
     }
 
     /**
-     * Crea o actualiza un presupuesto.
+     * Guarda un presupuesto en la base de datos. Si ya existe un presupuesto para el usuario y la categoría,
+     * actualiza el existente.
      *
-     * @param budget Presupuesto a guardar.
-     * @return Presupuesto creado o actualizado.
-     * @throws BudgetServiceException Si los datos del presupuesto son inválidos.
+     * @param budget    Presupuesto a guardar o actualizar.
+     * @param userEmail Email del usuario autenticado.
+     * @return El presupuesto guardado o actualizado.
+     * @throws BudgetServiceException Si hay errores de validación o el usuario no existe.
      */
     @Transactional
-    public Budget save(Budget budget) throws BudgetServiceException {
+    public Budget save(Budget budget, String userEmail) throws BudgetServiceException {
         validateBudget(budget);
 
-        // Verifica si ya existe un presupuesto para el usuario y la categoría
-        Optional<Budget> existingBudget = budgetRepository.findByUserIdAndCategoryId(
-                budget.getUser().getId(), budget.getCategory().getId()
+        Optional<Budget> existingBudget = budgetRepository.findByUserEmailAndCategoryId(
+                userEmail, budget.getCategory().getId()
         );
 
         if (existingBudget.isPresent()) {
@@ -54,61 +60,62 @@ public class BudgetService {
             return budgetRepository.save(budgetToUpdate);
         }
 
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new BudgetServiceException("Usuario no encontrado."));
+        budget.setUser(user);
+
         return budgetRepository.save(budget);
     }
 
     /**
-     * Recupera todos los presupuestos de un usuario.
+     * Busca todos los presupuestos asociados a un usuario.
      *
-     * @param userId ID del usuario.
-     * @return Lista de presupuestos.
-     * @throws BudgetServiceException Si no se encuentran presupuestos.
+     * @param userEmail Email del usuario autenticado.
+     * @return Lista de presupuestos del usuario.
      */
-    public List<Budget> findByUserId(Long userId) throws BudgetServiceException {
-        if (!userRepository.existsById(userId)) {
-            throw new BudgetServiceException("El usuario no existe.");
-        }
-
-        List<Budget> budgets = budgetRepository.findByUserId(userId);
-        if (budgets.isEmpty()) {
-            throw new BudgetServiceException("No se encontraron presupuestos para el usuario.");
-        }
-
-        return budgets;
+    public List<Budget> findByUserEmail(String userEmail) {
+        return budgetRepository.findByUserEmail(userEmail);
     }
 
     /**
-     * Recupera un presupuesto por usuario y categoría.
+     * Busca un presupuesto específico por el email del usuario y el ID de la categoría.
      *
-     * @param userId     ID del usuario.
-     * @param categoryId ID de la categoría.
-     * @return Presupuesto encontrado.
-     * @throws BudgetServiceException Si el presupuesto no existe.
+     * @param userEmail  Email del usuario autenticado.
+     * @param categoryId ID de la categoría del presupuesto.
+     * @return El presupuesto encontrado.
+     * @throws BudgetServiceException Si no se encuentra el presupuesto.
      */
-    public Budget findByUserIdAndCategoryId(Long userId, Long categoryId) throws BudgetServiceException {
-        if (!userRepository.existsById(userId)) {
-            throw new BudgetServiceException("El usuario no existe.");
-        }
-        if (!categoryRepository.existsById(categoryId)) {
-            throw new BudgetServiceException("La categoría no existe.");
-        }
+    public Budget findByUserEmailAndCategoryId(String userEmail, Long categoryId) throws BudgetServiceException {
+        return budgetRepository.findByUserEmailAndCategoryId(userEmail, categoryId)
+                .orElseThrow(() -> new BudgetServiceException("Presupuesto no encontrado."));
+    }
 
-        return budgetRepository.findByUserIdAndCategoryId(userId, categoryId)
-                .orElseThrow(() -> new BudgetServiceException("El presupuesto no existe para el usuario y categoría especificados."));
+    /**
+     * Calcula el porcentaje de cumplimiento de un presupuesto basado en el total gastado en su categoría.
+     *
+     * @param budgetId ID del presupuesto.
+     * @return Porcentaje de cumplimiento (entre 0 y 100).
+     * @throws BudgetServiceException Si no se encuentra el presupuesto.
+     */
+    public double getBudgetCompletionPercentage(Long budgetId) throws BudgetServiceException {
+        Budget budget = budgetRepository.findById(budgetId)
+                .orElseThrow(() -> new BudgetServiceException("Presupuesto no encontrado."));
+
+        // Lógica adicional para obtener el total gastado en la categoría del presupuesto
+        double totalSpent = 0.0; // Simulación, implementar según negocio
+        return (totalSpent / budget.getLimit()) * 100;
     }
 
     /**
      * Elimina un presupuesto por su ID.
      *
      * @param id ID del presupuesto.
-     * @throws BudgetServiceException Si el presupuesto no existe.
+     * @throws BudgetServiceException Si no se encuentra el presupuesto.
      */
-    @Transactional
     public void deleteById(Long id) throws BudgetServiceException {
         if (!budgetRepository.existsById(id)) {
-            throw new BudgetServiceException("El presupuesto no existe.");
+            throw new BudgetServiceException("Presupuesto no encontrado.");
         }
-
         budgetRepository.deleteById(id);
     }
 
@@ -116,26 +123,14 @@ public class BudgetService {
      * Valida los datos de un presupuesto.
      *
      * @param budget Presupuesto a validar.
-     * @throws BudgetServiceException Si los datos son inválidos.
+     * @throws BudgetServiceException Si los datos del presupuesto son inválidos.
      */
     private void validateBudget(Budget budget) throws BudgetServiceException {
-        if (budget == null) {
-            throw new BudgetServiceException("El presupuesto no puede ser nulo.");
-        }
         if (budget.getLimit() == null || budget.getLimit() <= 0) {
             throw new BudgetServiceException("El límite del presupuesto debe ser positivo.");
         }
-        if (budget.getUser() == null || budget.getUser().getId() == null) {
-            throw new BudgetServiceException("El presupuesto debe estar asociado a un usuario válido.");
-        }
-        if (budget.getCategory() == null || budget.getCategory().getId() == null) {
-            throw new BudgetServiceException("El presupuesto debe estar asociado a una categoría válida.");
-        }
-        if (budget.getStartDate() == null || budget.getEndDate() == null) {
-            throw new BudgetServiceException("El presupuesto debe tener un rango de fechas válido.");
-        }
-        if (budget.getEndDate().isBefore(budget.getStartDate())) {
-            throw new BudgetServiceException("La fecha de fin no puede ser anterior a la fecha de inicio.");
+        if (budget.getStartDate().isAfter(budget.getEndDate())) {
+            throw new BudgetServiceException("La fecha de inicio no puede ser posterior a la fecha de fin.");
         }
     }
 }

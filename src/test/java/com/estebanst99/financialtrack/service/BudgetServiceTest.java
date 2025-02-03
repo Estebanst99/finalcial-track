@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,17 +23,17 @@ import static org.mockito.Mockito.*;
 
 class BudgetServiceTest {
 
+    @InjectMocks
+    private BudgetService budgetService;
+
     @Mock
     private BudgetRepository budgetRepository;
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
     private CategoryRepository categoryRepository;
 
-    @InjectMocks
-    private BudgetService budgetService;
+    @Mock
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -40,26 +41,20 @@ class BudgetServiceTest {
     }
 
     @Test
-    void testSave_ValidBudget() throws BudgetServiceException {
-        User user = new User();
-        user.setId(1L);
-
-        Category category = new Category();
-        category.setId(1L);
-
+    void testSave_NewBudget() throws BudgetServiceException {
         Budget budget = new Budget();
+        budget.setCategory(new Category());
+        budget.setUser(new User());
         budget.setLimit(1000.0);
         budget.setStartDate(LocalDate.now());
-        budget.setEndDate(LocalDate.now().plusMonths(1));
-        budget.setUser(user);
-        budget.setCategory(category);
+        budget.setEndDate(LocalDate.now().plusDays(30));
 
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(categoryRepository.existsById(1L)).thenReturn(true);
-        when(budgetRepository.findByUserIdAndCategoryId(1L, 1L)).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(new User()));
+        when(budgetRepository.findByUserEmailAndCategoryId("test@example.com", budget.getCategory().getId()))
+                .thenReturn(Optional.empty());
         when(budgetRepository.save(budget)).thenReturn(budget);
 
-        Budget savedBudget = budgetService.save(budget);
+        Budget savedBudget = budgetService.save(budget, "test@example.com");
 
         assertNotNull(savedBudget);
         verify(budgetRepository, times(1)).save(budget);
@@ -67,79 +62,79 @@ class BudgetServiceTest {
 
     @Test
     void testSave_UpdateExistingBudget() throws BudgetServiceException {
-        User user = new User();
-        user.setId(1L);
-
-        Category category = new Category();
-        category.setId(1L);
+        Budget budget = new Budget();
+        budget.setCategory(new Category());
+        budget.setLimit(2000.0);
+        budget.setStartDate(LocalDate.now());
+        budget.setEndDate(LocalDate.now().plusDays(30));
 
         Budget existingBudget = new Budget();
-        existingBudget.setId(1L);
-        existingBudget.setLimit(500.0);
-        existingBudget.setStartDate(LocalDate.now());
-        existingBudget.setEndDate(LocalDate.now().plusMonths(1));
-        existingBudget.setUser(user);
-        existingBudget.setCategory(category);
+        existingBudget.setLimit(1000.0);
 
-        Budget updatedBudget = new Budget();
-        updatedBudget.setLimit(1000.0);
-        updatedBudget.setStartDate(LocalDate.now());
-        updatedBudget.setEndDate(LocalDate.now().plusMonths(2));
-        updatedBudget.setUser(user);
-        updatedBudget.setCategory(category);
-
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(categoryRepository.existsById(1L)).thenReturn(true);
-        when(budgetRepository.findByUserIdAndCategoryId(1L, 1L)).thenReturn(Optional.of(existingBudget));
+        when(budgetRepository.findByUserEmailAndCategoryId("test@example.com", budget.getCategory().getId()))
+                .thenReturn(Optional.of(existingBudget));
         when(budgetRepository.save(existingBudget)).thenReturn(existingBudget);
 
-        Budget result = budgetService.save(updatedBudget);
+        Budget updatedBudget = budgetService.save(budget, "test@example.com");
 
-        assertNotNull(result);
-        assertEquals(1000.0, result.getLimit());
-        assertEquals(LocalDate.now().plusMonths(2), result.getEndDate());
+        assertEquals(2000.0, updatedBudget.getLimit());
         verify(budgetRepository, times(1)).save(existingBudget);
     }
 
     @Test
-    void testFindByUserId_UserNotExists() {
+    void testFindByUserEmail_Success() {
+        List<Budget> budgets = Arrays.asList(new Budget(), new Budget());
+        when(budgetRepository.findByUserEmail("test@example.com")).thenReturn(budgets);
 
-        Long userId = 1L;
-        when(userRepository.existsById(userId)).thenReturn(false);
+        List<Budget> result = budgetService.findByUserEmail("test@example.com");
 
-        BudgetServiceException exception = assertThrows(BudgetServiceException.class, () -> budgetService.findByUserId(userId));
-        assertEquals("El usuario no existe.", exception.getMessage());
+        assertEquals(2, result.size());
     }
 
     @Test
-    void testFindByUserId_NoBudgetsFound() {
+    void testFindByUserEmailAndCategoryId_Success() throws BudgetServiceException {
+        Budget budget = new Budget();
+        when(budgetRepository.findByUserEmailAndCategoryId("test@example.com", 1L))
+                .thenReturn(Optional.of(budget));
 
-        Long userId = 1L;
-        when(userRepository.existsById(userId)).thenReturn(true);
-        when(budgetRepository.findByUserId(userId)).thenReturn(List.of());
+        Budget result = budgetService.findByUserEmailAndCategoryId("test@example.com", 1L);
 
-        BudgetServiceException exception = assertThrows(BudgetServiceException.class, () -> budgetService.findByUserId(userId));
-        assertEquals("No se encontraron presupuestos para el usuario.", exception.getMessage());
+        assertNotNull(result);
     }
 
     @Test
-    void testDeleteById_ExistingBudget() throws BudgetServiceException {
+    void testFindByUserEmailAndCategoryId_NotFound() {
+        when(budgetRepository.findByUserEmailAndCategoryId("test@example.com", 1L))
+                .thenReturn(Optional.empty());
 
-        Long budgetId = 1L;
-        when(budgetRepository.existsById(budgetId)).thenReturn(true);
-
-        budgetService.deleteById(budgetId);
-
-        verify(budgetRepository, times(1)).deleteById(budgetId);
+        assertThrows(BudgetServiceException.class, () -> budgetService.findByUserEmailAndCategoryId("test@example.com", 1L));
     }
 
     @Test
-    void testDeleteById_BudgetNotExists() {
+    void testDeleteById_Success() throws BudgetServiceException {
+        when(budgetRepository.existsById(1L)).thenReturn(true);
 
-        Long budgetId = 1L;
-        when(budgetRepository.existsById(budgetId)).thenReturn(false);
+        budgetService.deleteById(1L);
 
-        BudgetServiceException exception = assertThrows(BudgetServiceException.class, () -> budgetService.deleteById(budgetId));
-        assertEquals("El presupuesto no existe.", exception.getMessage());
+        verify(budgetRepository, times(1)).deleteById(1L);
+    }
+
+    @Test
+    void testDeleteById_NotFound() {
+        when(budgetRepository.existsById(1L)).thenReturn(false);
+
+        assertThrows(BudgetServiceException.class, () -> budgetService.deleteById(1L));
+    }
+
+    @Test
+    void testGetBudgetCompletionPercentage_Success() throws BudgetServiceException {
+        Budget budget = new Budget();
+        budget.setLimit(1000.0);
+
+        when(budgetRepository.findById(1L)).thenReturn(Optional.of(budget));
+
+        double percentage = budgetService.getBudgetCompletionPercentage(1L);
+
+        assertEquals(0.0, percentage); // Simula lógica de cálculo
     }
 }

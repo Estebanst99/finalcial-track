@@ -1,20 +1,22 @@
 package com.estebanst99.financialtrack.controller;
 
 import com.estebanst99.financialtrack.entity.Transaction;
-import com.estebanst99.financialtrack.exception.TransactionServiceException;
 import com.estebanst99.financialtrack.service.TransactionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class TransactionControllerTest {
@@ -28,49 +30,75 @@ class TransactionControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        mockSecurityContext();
+    }
+
+    private void mockSecurityContext() {
+        User user = new User("user@example.com", "password", List.of());
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        when(authentication.getPrincipal()).thenReturn(user);
+
+        SecurityContextHolder.setContext(securityContext);
     }
 
     @Test
-    void testGetTransactionsByUserId_Success() throws TransactionServiceException {
-        Long userId = 1L;
-        List<Transaction> transactions = Collections.singletonList(new Transaction());
-        when(transactionService.findByUserId(userId)).thenReturn(transactions);
+    void testGetAllTransactions() {
+        when(transactionService.findAllByUser("user@example.com")).thenReturn(List.of(new Transaction()));
 
-        ResponseEntity<List<Transaction>> response = transactionController.getTransactionsByUserId(userId);
+        ResponseEntity<List<Transaction>> response = transactionController.getAllTransactions();
 
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals(transactions, response.getBody());
+        assertNotNull(response.getBody());
+        assertEquals(1, response.getBody().size());
     }
 
     @Test
-    void testGetTransactionsByUserId_Failure() throws TransactionServiceException {
-        Long userId = 1L;
-        when(transactionService.findByUserId(userId)).thenThrow(new TransactionServiceException("Error"));
-
-        ResponseEntity<List<Transaction>> response = transactionController.getTransactionsByUserId(userId);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-    }
-
-    @Test
-    void testCreateTransaction_Success() throws TransactionServiceException {
+    void testGetTransactionById_TransactionExists() {
         Transaction transaction = new Transaction();
-        Transaction savedTransaction = new Transaction();
-        when(transactionService.save(transaction)).thenReturn(savedTransaction);
+        when(transactionService.findByIdAndUser(1L, "user@example.com")).thenReturn(Optional.of(transaction));
+
+        ResponseEntity<Transaction> response = transactionController.getTransactionById(1L);
+
+        assertEquals(transaction, response.getBody());
+    }
+
+    @Test
+    void testGetTransactionById_TransactionNotFound() {
+        when(transactionService.findByIdAndUser(1L, "user@example.com")).thenReturn(Optional.empty());
+
+        ResponseEntity<Transaction> response = transactionController.getTransactionById(1L);
+
+        assertEquals("404 NOT_FOUND", response.getStatusCode().toString());
+    }
+
+    @Test
+    void testCreateTransaction() throws Exception {
+        Transaction transaction = new Transaction();
+        when(transactionService.save(transaction)).thenReturn(transaction);
 
         ResponseEntity<Transaction> response = transactionController.createTransaction(transaction);
 
-        assertEquals(HttpStatus.CREATED, response.getStatusCode());
-        assertEquals(savedTransaction, response.getBody());
+        assertEquals("201 CREATED", response.getStatusCode().toString());
     }
 
     @Test
-    void testCreateTransaction_Failure() throws TransactionServiceException {
+    void testUpdateTransaction() throws Exception {
         Transaction transaction = new Transaction();
-        when(transactionService.save(transaction)).thenThrow(new TransactionServiceException("Error"));
+        when(transactionService.update(1L, transaction, "user@example.com")).thenReturn(transaction);
 
-        ResponseEntity<Transaction> response = transactionController.createTransaction(transaction);
+        ResponseEntity<Transaction> response = transactionController.updateTransaction(1L, transaction);
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(transaction, response.getBody());
+    }
+
+    @Test
+    void testDeleteTransaction() {
+        doNothing().when(transactionService).deleteById(1L, "user@example.com");
+
+        ResponseEntity<Void> response = transactionController.deleteTransaction(1L);
+
+        assertEquals("204 NO_CONTENT", response.getStatusCode().toString());
     }
 }

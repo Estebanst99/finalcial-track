@@ -4,13 +4,14 @@ import com.estebanst99.financialtrack.entity.Budget;
 import com.estebanst99.financialtrack.exception.BudgetServiceException;
 import com.estebanst99.financialtrack.service.BudgetService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * Controlador que gestiona los endpoints relacionados con los presupuestos.
- * Los usuarios pueden obtener, crear o actualizar sus presupuestos.
+ * Controlador REST que gestiona las operaciones relacionadas con los presupuestos.
  */
 @RestController
 @RequestMapping("/api/v1/budgets")
@@ -19,7 +20,7 @@ public class BudgetController {
     private final BudgetService budgetService;
 
     /**
-     * Constructor que inyecta el servicio de presupuesto.
+     * Constructor que inyecta el servicio de presupuestos.
      *
      * @param budgetService Servicio para gestionar presupuestos.
      */
@@ -28,36 +29,58 @@ public class BudgetController {
     }
 
     /**
-     * Endpoint para obtener todos los presupuestos asociados a un usuario.
+     * Endpoint para obtener todos los presupuestos del usuario autenticado.
      *
-     * @param userId ID del usuario.
-     * @return Una respuesta con la lista de presupuestos del usuario, o una respuesta de error.
+     * @return Una respuesta HTTP que contiene la lista de presupuestos del usuario.
      */
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<Budget>> getBudgetsByUserId(@PathVariable Long userId) {
+    @GetMapping
+    public ResponseEntity<List<Budget>> getBudgets() {
+        String userEmail = getAuthenticatedUserEmail();
+        List<Budget> budgets = budgetService.findByUserEmail(userEmail);
+        return ResponseEntity.ok(budgets);
+    }
+
+    /**
+     * Endpoint para crear o actualizar un presupuesto.
+     * Si ya existe un presupuesto para la misma categoría, se actualiza.
+     *
+     * @param budget Objeto {@link Budget} con los datos del presupuesto a crear o actualizar.
+     * @return Una respuesta HTTP con el presupuesto creado o actualizado, o una respuesta de error si falla la validación.
+     */
+    @PostMapping
+    public ResponseEntity<Budget> saveBudget(@RequestBody Budget budget) {
         try {
-            List<Budget> budgets = budgetService.findByUserId(userId);
-            return ResponseEntity.ok(budgets);
+            String userEmail = getAuthenticatedUserEmail();
+            Budget savedBudget = budgetService.save(budget, userEmail);
+            return ResponseEntity.status(201).body(savedBudget);
         } catch (BudgetServiceException e) {
             return ResponseEntity.badRequest().build();
         }
     }
 
     /**
-     * Endpoint para crear o actualizar un presupuesto.
-     * Si se proporciona un ID existente en el presupuesto, se actualiza ese registro.
-     * Si no, se crea un nuevo presupuesto.
+     * Endpoint para obtener el porcentaje de cumplimiento de un presupuesto basado en el total gastado.
      *
-     * @param budget Objeto {@link Budget} con los datos del presupuesto a crear o actualizar.
-     * @return Una respuesta con el presupuesto creado o actualizado, o una respuesta de error.
+     * @param budgetId ID del presupuesto.
+     * @return Una respuesta HTTP con el porcentaje de cumplimiento, o una respuesta de error si no se encuentra el presupuesto.
      */
-    @PostMapping
-    public ResponseEntity<Budget> saveBudget(@RequestBody Budget budget) {
+    @GetMapping("/completion/{budgetId}")
+    public ResponseEntity<Double> getBudgetCompletion(@PathVariable Long budgetId) {
         try {
-            Budget savedBudget = budgetService.save(budget);
-            return ResponseEntity.status(201).body(savedBudget);
+            double completionPercentage = budgetService.getBudgetCompletionPercentage(budgetId);
+            return ResponseEntity.ok(completionPercentage);
         } catch (BudgetServiceException e) {
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    /**
+     * Obtiene el email del usuario autenticado desde el contexto de seguridad.
+     *
+     * @return Email del usuario autenticado.
+     */
+    private String getAuthenticatedUserEmail() {
+        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return userDetails.getUsername();
     }
 }

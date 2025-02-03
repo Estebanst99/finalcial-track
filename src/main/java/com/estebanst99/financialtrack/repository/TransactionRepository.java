@@ -2,25 +2,15 @@ package com.estebanst99.financialtrack.repository;
 
 import com.estebanst99.financialtrack.entity.Transaction;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
-public interface TransactionRepository extends JpaRepository<Transaction,Long> {
+@Repository
+public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
-    /**
-     * Encuentra todas las transacciones de un usuario por su ID.
-     *
-     * @param userId ID del usuario.
-     * @return Lista de transacciones del usuario.
-     */
-    List<Transaction> findByUserId(Long userId);
+    List<Transaction> findAllByUserEmail(String userEmail);
 
-    /**
-     * Encuentra transacciones por usuario y tipo (income o expense).
-     *
-     * @param userId ID del usuario.
-     * @param type   Tipo de transacción ('income' o 'expense').
-     * @return Lista de transacciones que coinciden con los criterios.
-     */
-    List<Transaction> findByUserIdAndType(Long userId, String type);
+    Optional<Transaction> findByIdAndUserEmail(Long id, String userEmail);
 }

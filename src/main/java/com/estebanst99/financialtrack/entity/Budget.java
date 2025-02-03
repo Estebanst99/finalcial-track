@@ -1,7 +1,6 @@
 package com.estebanst99.financialtrack.entity;
 
 import jakarta.persistence.*;
-
 import java.time.LocalDate;
 
 @Entity
@@ -27,6 +26,9 @@ public class Budget {
 
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
+
+    @Column(name = "recurrence_type")
+    private String recurrenceType;
 
     public Long getId() {
         return id;
@@ -74,5 +76,13 @@ public class Budget {
 
     public void setEndDate(LocalDate endDate) {
         this.endDate = endDate;
+    }
+
+    public String getRecurrenceType() {
+        return recurrenceType;
+    }
+
+    public void setRecurrenceType(String recurrenceType) {
+        this.recurrenceType = recurrenceType;
     }
 }

@@ -1,16 +1,19 @@
 package com.estebanst99.financialtrack.controller;
 
 import com.estebanst99.financialtrack.entity.Transaction;
+import com.estebanst99.financialtrack.exception.CategoryServiceException;
 import com.estebanst99.financialtrack.exception.TransactionServiceException;
 import com.estebanst99.financialtrack.service.TransactionService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 /**
- * Controlador REST para gestionar transacciones.
- * Proporciona endpoints para operaciones de consulta y creación de transacciones.
+ * Controlador REST para la gestión de transacciones financieras.
+ * Proporciona endpoints para realizar operaciones CRUD sobre las transacciones del usuario autenticado.
  */
 @RestController
 @RequestMapping("/api/v1/transactions")
@@ -19,45 +22,92 @@ public class TransactionController {
     private final TransactionService transactionService;
 
     /**
-     * Constructor que inyecta la dependencia del servicio de transacciones.
+     * Constructor del controlador que inyecta el servicio de transacciones.
      *
-     * @param transactionService Servicio de transacciones.
+     * @param transactionService Servicio para la gestión de transacciones.
      */
     public TransactionController(TransactionService transactionService) {
         this.transactionService = transactionService;
     }
 
     /**
-     * Obtiene todas las transacciones asociadas a un usuario específico.
+     * Recupera todas las transacciones asociadas al usuario autenticado.
      *
-     * @param userId ID del usuario del cual se quieren obtener las transacciones.
-     * @return Una respuesta HTTP que contiene la lista de transacciones del usuario.
-     *         Si ocurre un error, devuelve una respuesta con código 400 (BAD_REQUEST).
+     * @return Una respuesta HTTP con una lista de transacciones.
      */
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<Transaction>> getTransactionsByUserId(@PathVariable Long userId) {
-        try {
-            List<Transaction> transactions = transactionService.findByUserId(userId);
-            return ResponseEntity.ok(transactions);
-        } catch (TransactionServiceException e) {
-            return ResponseEntity.badRequest().build();
-        }
+    @GetMapping
+    public ResponseEntity<List<Transaction>> getAllTransactions() {
+        String userEmail = getAuthenticatedUserEmail();
+        List<Transaction> transactions = transactionService.findAllByUser(userEmail);
+        return ResponseEntity.ok(transactions);
     }
 
     /**
-     * Crea una nueva transacción para el usuario.
+     * Recupera una transacción específica por su ID, si pertenece al usuario autenticado.
      *
-     * @param transaction Objeto de tipo {@link Transaction} que representa la transacción a crear.
-     * @return Una respuesta HTTP con la transacción creada y el código 201 (CREATED).
-     *         Si ocurre un error, devuelve una respuesta con código 400 (BAD_REQUEST).
+     * @param id ID de la transacción a recuperar.
+     * @return Una respuesta HTTP con la transacción encontrada o un estado 404 si no se encuentra.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Transaction> getTransactionById(@PathVariable Long id) {
+        String userEmail = getAuthenticatedUserEmail();
+        return transactionService.findByIdAndUser(id, userEmail)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.status(404).body(null));
+    }
+
+    /**
+     * Crea una nueva transacción para el usuario autenticado.
+     *
+     * @param transaction Transacción a crear.
+     * @return Una respuesta HTTP con la transacción creada.
+     * @throws CategoryServiceException    Si ocurre un error relacionado con la categoría.
+     * @throws TransactionServiceException Si ocurre un error relacionado con la transacción.
      */
     @PostMapping
-    public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) {
-        try {
-            Transaction savedTransaction = transactionService.save(transaction);
-            return ResponseEntity.status(201).body(savedTransaction);
-        } catch (TransactionServiceException e) {
-            return ResponseEntity.badRequest().build();
-        }
+    public ResponseEntity<Transaction> createTransaction(@RequestBody Transaction transaction) throws CategoryServiceException, TransactionServiceException {
+        String userEmail = getAuthenticatedUserEmail();
+        transactionService.validateAndAssignCategory(transaction, userEmail);
+        Transaction savedTransaction = transactionService.save(transaction);
+        return ResponseEntity.status(201).body(savedTransaction);
+    }
+
+    /**
+     * Actualiza una transacción existente del usuario autenticado.
+     *
+     * @param id          ID de la transacción a actualizar.
+     * @param transaction Datos de la transacción actualizada.
+     * @return Una respuesta HTTP con la transacción actualizada.
+     * @throws CategoryServiceException    Si ocurre un error relacionado con la categoría.
+     * @throws TransactionServiceException Si ocurre un error relacionado con la transacción.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Transaction> updateTransaction(@PathVariable Long id, @RequestBody Transaction transaction) throws CategoryServiceException, TransactionServiceException {
+        String userEmail = getAuthenticatedUserEmail();
+        Transaction updatedTransaction = transactionService.update(id, transaction, userEmail);
+        return ResponseEntity.ok(updatedTransaction);
+    }
+
+    /**
+     * Elimina una transacción del usuario autenticado por su ID.
+     *
+     * @param id ID de la transacción a eliminar.
+     * @return Una respuesta HTTP con un estado 204 (sin contenido) si la eliminación es exitosa.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTransaction(@PathVariable Long id) {
+        String userEmail = getAuthenticatedUserEmail();
+        transactionService.deleteById(id, userEmail);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Obtiene el correo electrónico del usuario autenticado.
+     *
+     * @return Correo electrónico del usuario autenticado.
+     */
+    private String getAuthenticatedUserEmail() {
+        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return userDetails.getUsername();
     }
 }

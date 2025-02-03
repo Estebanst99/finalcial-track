@@ -1,149 +1,114 @@
 package com.estebanst99.financialtrack.service;
 
+import com.estebanst99.financialtrack.entity.Category;
 import com.estebanst99.financialtrack.entity.Transaction;
+import com.estebanst99.financialtrack.exception.CategoryServiceException;
 import com.estebanst99.financialtrack.exception.TransactionServiceException;
-import com.estebanst99.financialtrack.repository.CategoryRepository;
 import com.estebanst99.financialtrack.repository.TransactionRepository;
-import com.estebanst99.financialtrack.repository.UserRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
-
+/**
+ * Servicio para la gestión de transacciones financieras.
+ * Proporciona métodos para crear, leer, actualizar y eliminar transacciones, así como
+ * validar categorías asociadas.
+ */
 @Service
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
-    private final UserRepository userRepository;
-    private final CategoryRepository categoryRepository;
-    //TODO añadir el logger
+    private final CategoryService categoryService;
 
     /**
-     * Constructor para inyectar los repositorios.
+     * Constructor del servicio de transacciones.
+     *
+     * @param transactionRepository Repositorio para la gestión de transacciones.
+     * @param categoryService       Servicio para la gestión de categorías.
      */
-    public TransactionService(TransactionRepository transactionRepository,
-                              UserRepository userRepository,
-                              CategoryRepository categoryRepository) {
+    public TransactionService(TransactionRepository transactionRepository, CategoryService categoryService) {
         this.transactionRepository = transactionRepository;
-        this.userRepository = userRepository;
-        this.categoryRepository = categoryRepository;
+        this.categoryService = categoryService;
     }
 
     /**
-     * Crea una nueva transacción.
+     * Recupera todas las transacciones de un usuario específico.
+     *
+     * @param userEmail Correo electrónico del usuario.
+     * @return Lista de transacciones asociadas al usuario.
+     */
+    public List<Transaction> findAllByUser(String userEmail) {
+        return transactionRepository.findAllByUserEmail(userEmail);
+    }
+
+    /**
+     * Busca una transacción por su ID y el usuario asociado.
+     *
+     * @param id        ID de la transacción.
+     * @param userEmail Correo electrónico del usuario.
+     * @return Un Optional con la transacción si se encuentra, o vacío si no.
+     */
+    public Optional<Transaction> findByIdAndUser(Long id, String userEmail) {
+        return transactionRepository.findByIdAndUserEmail(id, userEmail);
+    }
+
+    /**
+     * Guarda una nueva transacción en el repositorio.
      *
      * @param transaction Transacción a guardar.
-     * @return Transacción creada.
-     * @throws TransactionServiceException Si la transacción es inválida.
+     * @return La transacción guardada.
      */
-    @Transactional
-    public Transaction save(Transaction transaction) throws TransactionServiceException {
-        validateTransaction(transaction);
-
-        // Verifica que el usuario exista
-        if (!userRepository.existsById(transaction.getUser().getId())) {
-            throw new TransactionServiceException("El usuario asociado a la transacción no existe.");
-        }
-
-        // Verifica que la categoría exista
-        if (!categoryRepository.existsById(transaction.getCategory().getId())) {
-            throw new TransactionServiceException("La categoría asociada a la transacción no existe.");
-        }
-
+    public Transaction save(Transaction transaction) {
         return transactionRepository.save(transaction);
     }
 
     /**
-     * Recupera todas las transacciones de un usuario.
+     * Actualiza una transacción existente.
      *
-     * @param userId ID del usuario.
-     * @return Lista de transacciones.
-     * @throws TransactionServiceException Si no se encuentran transacciones o el usuario no existe.
+     * @param id          ID de la transacción a actualizar.
+     * @param transaction Nuevos datos para la transacción.
+     * @param userEmail   Correo electrónico del usuario propietario de la transacción.
+     * @return La transacción actualizada.
+     * @throws TransactionServiceException Si no se encuentra la transacción.
+     * @throws CategoryServiceException    Si ocurre un error relacionado con la categoría.
      */
-    public List<Transaction> findByUserId(Long userId) throws TransactionServiceException {
-        if (!userRepository.existsById(userId)) {
-            throw new TransactionServiceException("El usuario no existe.");
-        }
+    public Transaction update(Long id, Transaction transaction, String userEmail) throws TransactionServiceException, CategoryServiceException {
+        Transaction existingTransaction = findByIdAndUser(id, userEmail)
+                .orElseThrow(() -> new TransactionServiceException("Transacción no encontrada."));
 
-        List<Transaction> transactions = transactionRepository.findByUserId(userId);
-        if (transactions.isEmpty()) {
-            throw new TransactionServiceException("No se encontraron transacciones para el usuario.");
-        }
+        existingTransaction.setAmount(transaction.getAmount());
+        existingTransaction.setDescription(transaction.getDescription());
+        validateAndAssignCategory(transaction, userEmail);
 
-        return transactions;
-    }
-
-    /**
-     * Recupera transacciones por usuario y tipo.
-     *
-     * @param userId ID del usuario.
-     * @param type   Tipo de transacción ('income' o 'expense').
-     * @return Lista de transacciones filtradas por tipo.
-     * @throws TransactionServiceException Si no se encuentran transacciones o el tipo es inválido.
-     */
-    public List<Transaction> findByUserIdAndType(Long userId, String type) throws TransactionServiceException {
-        if (!userRepository.existsById(userId)) {
-            throw new TransactionServiceException("El usuario no existe.");
-        }
-
-        if (!isValidType(type)) {
-            throw new TransactionServiceException("El tipo de transacción debe ser 'income' o 'expense'.");
-        }
-
-        List<Transaction> transactions = transactionRepository.findByUserIdAndType(userId, type);
-        if (transactions.isEmpty()) {
-            throw new TransactionServiceException("No se encontraron transacciones para el usuario y tipo especificado.");
-        }
-
-        return transactions;
+        return transactionRepository.save(existingTransaction);
     }
 
     /**
      * Elimina una transacción por su ID.
      *
-     * @param id ID de la transacción.
-     * @throws TransactionServiceException Si la transacción no existe.
+     * @param id        ID de la transacción a eliminar.
+     * @param userEmail Correo electrónico del usuario propietario de la transacción.
      */
-    @Transactional
-    public void deleteById(Long id) throws TransactionServiceException {
-        if (!transactionRepository.existsById(id)) {
-            throw new TransactionServiceException("La transacción no existe.");
-        }
-
+    public void deleteById(Long id, String userEmail) {
         transactionRepository.deleteById(id);
     }
 
     /**
-     * Valida los datos de una transacción.
+     * Valida y asigna una categoría a una transacción.
      *
-     * @param transaction Transacción a validar.
-     * @throws TransactionServiceException Si los datos son inválidos.
+     * @param transaction Transacción a la que se le debe asignar una categoría.
+     * @param userEmail   Correo electrónico del usuario propietario de la transacción.
+     * @throws TransactionServiceException Si la categoría de la transacción es inválida.
+     * @throws CategoryServiceException    Si ocurre un error al buscar la categoría.
      */
-    private void validateTransaction(Transaction transaction) throws TransactionServiceException {
-        if (transaction == null) {
-            throw new TransactionServiceException("La transacción no puede ser nula.");
+    public void validateAndAssignCategory(Transaction transaction, String userEmail) throws TransactionServiceException, CategoryServiceException {
+        if (transaction.getCategory() == null || transaction.getCategory().getName() == null) {
+            throw new TransactionServiceException("La transacción no tiene una categoría válida asignada.");
         }
-        if (transaction.getAmount() == null || transaction.getAmount() <= 0) {
-            throw new TransactionServiceException("El monto de la transacción debe ser positivo.");
-        }
-        if (transaction.getUser() == null || transaction.getUser().getId() == null) {
-            throw new TransactionServiceException("La transacción debe estar asociada a un usuario válido.");
-        }
-        if (transaction.getCategory() == null || transaction.getCategory().getId() == null) {
-            throw new TransactionServiceException("La transacción debe estar asociada a una categoría válida.");
-        }
-    }
 
-    /**
-     * Valida si un tipo de transacción es válido.
-     *
-     * @param type Tipo de transacción.
-     * @return True si el tipo es válido, false en caso contrario.
-     */
-    private boolean isValidType(String type) {
-        return "income".equalsIgnoreCase(type) || "expense".equalsIgnoreCase(type);
+        Category category = categoryService.findByNameAndUser(transaction.getCategory().getName(), userEmail)
+                .orElseThrow(() -> new TransactionServiceException("Categoría no válida."));
+        transaction.setCategory(category);
     }
 }

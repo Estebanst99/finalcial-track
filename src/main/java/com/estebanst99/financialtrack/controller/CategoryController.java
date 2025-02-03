@@ -28,7 +28,7 @@ public class CategoryController {
      * @return Lista de categorías.
      */
     @GetMapping
-    public ResponseEntity<List<Category>> getCategoriesByType(@RequestParam String type) {
+    public ResponseEntity<List<Category>> getCategoriesByType(@RequestParam String type) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
         List<Category> categories = categoryService.findByTypeAndUser(type, userEmail);
         return ResponseEntity.ok(categories);
@@ -41,7 +41,7 @@ public class CategoryController {
      * @return Categoría creada o error si ya existe.
      */
     @PostMapping
-    public ResponseEntity<?> createCategory(@RequestBody Category category) {
+    public ResponseEntity<?> createCategory(@RequestBody Category category) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         if (categoryService.isCategoryDuplicate(category.getName(), userEmail)) {
@@ -61,7 +61,7 @@ public class CategoryController {
      * @return Categoría actualizada.
      */
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody Category category) {
+    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody Category category) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> existingCategory = categoryService.findByIdAndUser(id, userEmail);
@@ -84,7 +84,7 @@ public class CategoryController {
      * @return Respuesta exitosa o mensaje de error.
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteCategory(@PathVariable Long id) {
+    public ResponseEntity<?> deleteCategory(@PathVariable Long id) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> category = categoryService.findByIdAndUser(id, userEmail);
@@ -106,7 +106,7 @@ public class CategoryController {
      * @return Lista de categorías.
      */
     @GetMapping("/all")
-    public ResponseEntity<List<Category>> getAllCategories() {
+    public ResponseEntity<List<Category>> getAllCategories() throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
         List<Category> categories = categoryService.findAllByUser(userEmail);
         return ResponseEntity.ok(categories);
@@ -119,7 +119,7 @@ public class CategoryController {
      * @return Categoría encontrada o error 404.
      */
     @GetMapping("/search")
-    public ResponseEntity<Category> getCategoryByName(@RequestParam String name) {
+    public ResponseEntity<Category> getCategoryByName(@RequestParam String name) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> category = categoryService.findByNameAndUser(name, userEmail);

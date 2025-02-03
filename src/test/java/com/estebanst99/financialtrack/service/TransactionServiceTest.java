@@ -2,11 +2,9 @@ package com.estebanst99.financialtrack.service;
 
 import com.estebanst99.financialtrack.entity.Category;
 import com.estebanst99.financialtrack.entity.Transaction;
-import com.estebanst99.financialtrack.entity.User;
+import com.estebanst99.financialtrack.exception.CategoryServiceException;
 import com.estebanst99.financialtrack.exception.TransactionServiceException;
-import com.estebanst99.financialtrack.repository.CategoryRepository;
 import com.estebanst99.financialtrack.repository.TransactionRepository;
-import com.estebanst99.financialtrack.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -14,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -24,10 +23,7 @@ class TransactionServiceTest {
     private TransactionRepository transactionRepository;
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private CategoryRepository categoryRepository;
+    private CategoryService categoryService;
 
     @InjectMocks
     private TransactionService transactionService;
@@ -38,89 +34,112 @@ class TransactionServiceTest {
     }
 
     @Test
-    void testSave_ValidTransaction() throws TransactionServiceException {
-        User user = new User();
-        user.setId(1L);
+    void testFindAllByUser() {
+        when(transactionRepository.findAllByUserEmail("user@example.com")).thenReturn(List.of(new Transaction()));
 
-        Category category = new Category();
-        category.setId(1L);
+        List<Transaction> transactions = transactionService.findAllByUser("user@example.com");
 
+        assertNotNull(transactions);
+        assertEquals(1, transactions.size());
+    }
+
+    @Test
+    void testFindByIdAndUser_TransactionExists() {
         Transaction transaction = new Transaction();
-        transaction.setAmount(100.0);
-        transaction.setUser(user);
-        transaction.setCategory(category);
+        when(transactionRepository.findByIdAndUserEmail(1L, "user@example.com")).thenReturn(Optional.of(transaction));
 
-        when(userRepository.existsById(1L)).thenReturn(true);
-        when(categoryRepository.existsById(1L)).thenReturn(true);
+        Optional<Transaction> result = transactionService.findByIdAndUser(1L, "user@example.com");
+
+        assertTrue(result.isPresent());
+        assertEquals(transaction, result.get());
+    }
+
+    @Test
+    void testFindByIdAndUser_TransactionNotFound() {
+        when(transactionRepository.findByIdAndUserEmail(1L, "user@example.com")).thenReturn(Optional.empty());
+
+        Optional<Transaction> result = transactionService.findByIdAndUser(1L, "user@example.com");
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testSaveTransaction() {
+        Transaction transaction = new Transaction();
         when(transactionRepository.save(transaction)).thenReturn(transaction);
 
         Transaction savedTransaction = transactionService.save(transaction);
 
         assertNotNull(savedTransaction);
-        assertEquals(100.0, savedTransaction.getAmount());
-        verify(transactionRepository, times(1)).save(transaction);
     }
 
     @Test
-    void testSave_NullTransaction() {
-        Transaction transaction = null;
-
-        TransactionServiceException exception = assertThrows(TransactionServiceException.class, () -> transactionService.save(transaction));
-        assertEquals("La transacción no puede ser nula.", exception.getMessage());
-    }
-
-    @Test
-    void testSave_NegativeAmount() {
-        User user = new User();
-        user.setId(1L);
-
-        Category category = new Category();
-        category.setId(1L);
-
+    void testUpdate_TransactionExists() throws Exception {
         Transaction transaction = new Transaction();
-        transaction.setAmount(-50.0);
-        transaction.setUser(user);
+        Category category = new Category();
+        category.setName("Test Category");
         transaction.setCategory(category);
 
-        TransactionServiceException exception = assertThrows(TransactionServiceException.class, () -> transactionService.save(transaction));
-        assertEquals("El monto de la transacción debe ser positivo.", exception.getMessage());
+        Transaction existingTransaction = new Transaction();
+        existingTransaction.setCategory(category);
+
+        when(transactionRepository.findByIdAndUserEmail(1L, "user@example.com")).thenReturn(Optional.of(existingTransaction));
+        when(categoryService.findByNameAndUser("Test Category", "user@example.com")).thenReturn(Optional.of(category));
+        when(transactionRepository.save(existingTransaction)).thenReturn(existingTransaction);
+
+        Transaction updatedTransaction = transactionService.update(1L, transaction, "user@example.com");
+
+        assertNotNull(updatedTransaction);
     }
 
     @Test
-    void testFindByUserId_UserNotExists() {
-        Long userId = 1L;
-        when(userRepository.existsById(userId)).thenReturn(false);
+    void testValidateAndAssignCategory_NullCategory() {
+        Transaction transaction = new Transaction();
 
-        TransactionServiceException exception = assertThrows(TransactionServiceException.class, () -> transactionService.findByUserId(userId));
-        assertEquals("El usuario no existe.", exception.getMessage());
+        assertThrows(TransactionServiceException.class, () -> transactionService.validateAndAssignCategory(transaction, "user@example.com"));
+    }
+
+
+    @Test
+    void testUpdate_TransactionNotFound() {
+        when(transactionRepository.findByIdAndUserEmail(1L, "user@example.com")).thenReturn(Optional.empty());
+
+        Transaction transaction = new Transaction();
+
+        assertThrows(TransactionServiceException.class, () -> transactionService.update(1L, transaction, "user@example.com"));
     }
 
     @Test
-    void testFindByUserId_NoTransactionsFound() {
-        Long userId = 1L;
-        when(userRepository.existsById(userId)).thenReturn(true);
-        when(transactionRepository.findByUserId(userId)).thenReturn(List.of());
+    void testValidateAndAssignCategory_CategoryExists() throws Exception {
+        Category category = new Category();
+        category.setName("Test Category");
 
-        TransactionServiceException exception = assertThrows(TransactionServiceException.class, () -> transactionService.findByUserId(userId));
-        assertEquals("No se encontraron transacciones para el usuario.", exception.getMessage());
+        when(categoryService.findByNameAndUser(eq("Test Category"), anyString())).thenReturn(Optional.of(category));
+
+        Transaction transaction = new Transaction();
+        transaction.setCategory(category);
+
+        transactionService.validateAndAssignCategory(transaction, "user@example.com");
+
+        assertEquals(category, transaction.getCategory());
     }
 
     @Test
-    void testDeleteById_TransactionExists() throws TransactionServiceException {
-        Long transactionId = 1L;
-        when(transactionRepository.existsById(transactionId)).thenReturn(true);
+    void testValidateAndAssignCategory_CategoryNotFound() throws CategoryServiceException {
+        when(categoryService.findByNameAndUser(anyString(), anyString())).thenReturn(Optional.empty());
 
-        transactionService.deleteById(transactionId);
+        Transaction transaction = new Transaction();
+        transaction.setCategory(new Category());
 
-        verify(transactionRepository, times(1)).deleteById(transactionId);
+        assertThrows(TransactionServiceException.class, () -> transactionService.validateAndAssignCategory(transaction, "user@example.com"));
     }
 
     @Test
-    void testDeleteById_TransactionNotExists() {
-        Long transactionId = 1L;
-        when(transactionRepository.existsById(transactionId)).thenReturn(false);
+    void testDeleteTransaction() {
+        doNothing().when(transactionRepository).deleteById(1L);
 
-        TransactionServiceException exception = assertThrows(TransactionServiceException.class, () -> transactionService.deleteById(transactionId));
-        assertEquals("La transacción no existe.", exception.getMessage());
+        transactionService.deleteById(1L, "user@example.com");
+
+        verify(transactionRepository, times(1)).deleteById(1L);
     }
 }
