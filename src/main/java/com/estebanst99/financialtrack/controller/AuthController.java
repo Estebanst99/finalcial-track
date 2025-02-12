@@ -64,6 +64,11 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody User user) throws UserServiceException {
+        // Verificar si ya existe un usuario con el mismo email.
+        if (userService.findByEmail(user.getEmail()).isPresent()) {
+            return ResponseEntity.badRequest().body("El usuario ya existe");
+        }
+
         // Codificar la contraseña antes de guardar el usuario.
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         userService.save(user);

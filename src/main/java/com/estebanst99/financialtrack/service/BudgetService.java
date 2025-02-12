@@ -4,7 +4,7 @@ import com.estebanst99.financialtrack.entity.Budget;
 import com.estebanst99.financialtrack.entity.User;
 import com.estebanst99.financialtrack.exception.BudgetServiceException;
 import com.estebanst99.financialtrack.repository.BudgetRepository;
-import com.estebanst99.financialtrack.repository.CategoryRepository;
+import com.estebanst99.financialtrack.repository.TransactionRepository;
 import com.estebanst99.financialtrack.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,20 +19,22 @@ import java.util.Optional;
 public class BudgetService {
 
     private final BudgetRepository budgetRepository;
-    private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
+
+    private static final String BUDGET_NOT_FOUND = "Presupuesto no encontrado";
 
     /**
      * Constructor para inicializar los repositorios necesarios.
      *
-     * @param budgetRepository   Repositorio para operaciones de presupuesto.
-     * @param categoryRepository Repositorio para operaciones de categorías.
-     * @param userRepository     Repositorio para operaciones de usuarios.
+     * @param budgetRepository      Repositorio para operaciones de presupuesto.
+     * @param userRepository        Repositorio para operaciones de usuarios.
+     * @param transactionRepository
      */
-    public BudgetService(BudgetRepository budgetRepository, CategoryRepository categoryRepository, UserRepository userRepository) {
+    public BudgetService(BudgetRepository budgetRepository, UserRepository userRepository, TransactionRepository transactionRepository) {
         this.budgetRepository = budgetRepository;
-        this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
+        this.transactionRepository = transactionRepository;
     }
 
     /**
@@ -87,7 +89,7 @@ public class BudgetService {
      */
     public Budget findByUserEmailAndCategoryId(String userEmail, Long categoryId) throws BudgetServiceException {
         return budgetRepository.findByUserEmailAndCategoryId(userEmail, categoryId)
-                .orElseThrow(() -> new BudgetServiceException("Presupuesto no encontrado."));
+                .orElseThrow(() -> new BudgetServiceException(BUDGET_NOT_FOUND));
     }
 
     /**
@@ -99,10 +101,11 @@ public class BudgetService {
      */
     public double getBudgetCompletionPercentage(Long budgetId) throws BudgetServiceException {
         Budget budget = budgetRepository.findById(budgetId)
-                .orElseThrow(() -> new BudgetServiceException("Presupuesto no encontrado."));
+                .orElseThrow(() -> new BudgetServiceException(BUDGET_NOT_FOUND));
 
-        // Lógica adicional para obtener el total gastado en la categoría del presupuesto
-        double totalSpent = 0.0; // Simulación, implementar según negocio
+        double totalSpent = transactionRepository.getTotalSpentInCategory(budget.getCategory().getId(),
+                budget.getStartDate(), budget.getEndDate());
+
         return (totalSpent / budget.getLimit()) * 100;
     }
 
@@ -114,7 +117,7 @@ public class BudgetService {
      */
     public void deleteById(Long id) throws BudgetServiceException {
         if (!budgetRepository.existsById(id)) {
-            throw new BudgetServiceException("Presupuesto no encontrado.");
+            throw new BudgetServiceException(BUDGET_NOT_FOUND);
         }
         budgetRepository.deleteById(id);
     }
@@ -131,6 +134,13 @@ public class BudgetService {
         }
         if (budget.getStartDate().isAfter(budget.getEndDate())) {
             throw new BudgetServiceException("La fecha de inicio no puede ser posterior a la fecha de fin.");
+        }
+
+        List<Budget> overlappingBudgets = budgetRepository.findOverlappingBudgets(
+                budget.getUser().getEmail(), budget.getCategory().getId(), budget.getStartDate(), budget.getEndDate()
+        );
+        if (!overlappingBudgets.isEmpty()) {
+            throw new BudgetServiceException("Ya existe un presupuesto en este rango de fechas.");
         }
     }
 }

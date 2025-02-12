@@ -7,6 +7,7 @@ import com.estebanst99.financialtrack.exception.TransactionServiceException;
 import com.estebanst99.financialtrack.repository.TransactionRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -79,6 +80,7 @@ public class TransactionService {
 
         existingTransaction.setAmount(transaction.getAmount());
         existingTransaction.setDescription(transaction.getDescription());
+        existingTransaction.setDate(transaction.getDate());
         validateAndAssignCategory(transaction, userEmail);
 
         return transactionRepository.save(existingTransaction);
@@ -110,5 +112,18 @@ public class TransactionService {
         Category category = categoryService.findByNameAndUser(transaction.getCategory().getName(), userEmail)
                 .orElseThrow(() -> new TransactionServiceException("Categoría no válida."));
         transaction.setCategory(category);
+    }
+
+    /**
+     * Obtiene una lista de transacciones filtradas por usuario, rango de fechas y categoría.
+     *
+     * @param userEmail  Email del usuario.
+     * @param startDate  Fecha de inicio del rango (opcional).
+     * @param endDate    Fecha de fin del rango (opcional).
+     * @param categoryId ID de la categoría (opcional).
+     * @return Lista de transacciones filtradas.
+     */
+    public List<Transaction> getTransactionsByFilters(String userEmail, LocalDate startDate, LocalDate endDate, Long categoryId) {
+        return transactionRepository.findTransactionsByFilters(userEmail, startDate, endDate, categoryId);
     }
 }

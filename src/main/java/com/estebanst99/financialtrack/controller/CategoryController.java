@@ -3,6 +3,10 @@ package com.estebanst99.financialtrack.controller;
 import com.estebanst99.financialtrack.entity.Category;
 import com.estebanst99.financialtrack.exception.CategoryServiceException;
 import com.estebanst99.financialtrack.service.CategoryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -27,6 +31,9 @@ public class CategoryController {
      * @param type Tipo de categoría ('income' o 'expense').
      * @return Lista de categorías.
      */
+    @Operation(summary = "Obtiene categorías por tipo", description = "Devuelve una lista de categorías de tipo 'income' o 'expense' para el usuario autenticado.")
+    @ApiResponse(responseCode = "200", description = "Lista de categorías devuelta exitosamente")
+    @ApiResponse(responseCode = "400", description = "Tipo de categoría inválido", content = @Content)
     @GetMapping
     public ResponseEntity<List<Category>> getCategoriesByType(@RequestParam String type) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
@@ -40,8 +47,13 @@ public class CategoryController {
      * @param category Categoría a crear.
      * @return Categoría creada o error si ya existe.
      */
+    @Operation(summary = "Crea una nueva categoría", description = "Permite crear una categoría para el usuario autenticado.")
+    @ApiResponse(responseCode = "201", description = "Categoría creada exitosamente")
+    @ApiResponse(responseCode = "400", description = "Ya existe una categoría con ese nombre", content = @Content)
     @PostMapping
-    public ResponseEntity<?> createCategory(@RequestBody Category category) throws CategoryServiceException {
+    public ResponseEntity<?> createCategory(
+            @RequestBody Category category
+    ) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         if (categoryService.isCategoryDuplicate(category.getName(), userEmail)) {
@@ -60,8 +72,15 @@ public class CategoryController {
      * @param category Datos de la categoría a actualizar.
      * @return Categoría actualizada.
      */
+    @Operation(summary = "Actualiza una categoría", description = "Permite actualizar una categoría existente.")
+    @ApiResponse(responseCode = "200", description = "Categoría actualizada exitosamente")
+    @ApiResponse(responseCode = "404", description = "Categoría no encontrada", content = @Content)
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateCategory(@PathVariable Long id, @RequestBody Category category) throws CategoryServiceException {
+    public ResponseEntity<?> updateCategory(
+            @Parameter(description = "ID de la categoría a actualizar", required = true, example = "1")
+            @PathVariable Long id,
+            @RequestBody Category category
+    ) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> existingCategory = categoryService.findByIdAndUser(id, userEmail);
@@ -83,8 +102,15 @@ public class CategoryController {
      * @param id ID de la categoría a eliminar.
      * @return Respuesta exitosa o mensaje de error.
      */
+    @Operation(summary = "Elimina una categoría", description = "Elimina una categoría por ID si no tiene dependencias.")
+    @ApiResponse(responseCode = "204", description = "Categoría eliminada exitosamente")
+    @ApiResponse(responseCode = "404", description = "Categoría no encontrada", content = @Content)
+    @ApiResponse(responseCode = "400", description = "La categoría tiene dependencias y no puede ser eliminada", content = @Content)
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteCategory(@PathVariable Long id) throws CategoryServiceException {
+    public ResponseEntity<?> deleteCategory(
+            @Parameter(description = "ID de la categoría a eliminar", required = true, example = "1")
+            @PathVariable Long id
+    ) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> category = categoryService.findByIdAndUser(id, userEmail);
@@ -105,6 +131,8 @@ public class CategoryController {
      *
      * @return Lista de categorías.
      */
+    @Operation(summary = "Obtiene todas las categorías", description = "Devuelve una lista de todas las categorías para el usuario autenticado.")
+    @ApiResponse(responseCode = "200", description = "Lista de categorías devuelta exitosamente")
     @GetMapping("/all")
     public ResponseEntity<List<Category>> getAllCategories() throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
@@ -118,8 +146,14 @@ public class CategoryController {
      * @param name Nombre de la categoría.
      * @return Categoría encontrada o error 404.
      */
+    @Operation(summary = "Busca una categoría por nombre", description = "Busca una categoría específica por su nombre para el usuario autenticado.")
+    @ApiResponse(responseCode = "200", description = "Categoría encontrada exitosamente")
+    @ApiResponse(responseCode = "404", description = "Categoría no encontrada", content = @Content)
     @GetMapping("/search")
-    public ResponseEntity<Category> getCategoryByName(@RequestParam String name) throws CategoryServiceException {
+    public ResponseEntity<Category> getCategoryByName(
+            @Parameter(description = "Nombre de la categoría a buscar", required = true, example = "Alimentación")
+            @RequestParam String name
+    ) throws CategoryServiceException {
         String userEmail = getAuthenticatedUserEmail();
 
         Optional<Category> category = categoryService.findByNameAndUser(name, userEmail);
